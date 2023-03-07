@@ -13,6 +13,7 @@
 
 import csv
 import sys
+import os
 import datetime as dt
 
 def normalized_name(name_string):
@@ -143,8 +144,8 @@ def dictify(field_names, field_values):
     # field_values is a list of values
     # create and return a dictionary that associates field names with field values
     # length of field_values must be <= length of field_names
-    if len(field_values) > len(field_names):
-        print('in dictify, too many field values!')
+    if len(field_values) != len(field_names):
+        print('in dictify, number of field values does not match number of expected fields')
         return {}
     new_dict = {}
     for field_num in range(0,len(field_names)):
@@ -152,22 +153,6 @@ def dictify(field_names, field_values):
         this_value = field_values[field_num]
         new_dict[this_field] = this_value
     return new_dict
-
-# need to eliminate all the globals!!
-# program constants
-LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
-COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
-
-# Global Variables
-Active_Committees = dict()
-Trips = list()
-Open_Trips = 0
-Cancelled_Trips = 0
-Waitlisted_Trips = 0
-Full_Trips = 0
-Earliest_Trip = dt.datetime(dt.MAXYEAR,12,31)
-Latest_Trip = dt.datetime(dt.MINYEAR,1,1)
-Next_Fake_ID = -1
 
 # load leaders from the leaderfile
 def load_leaders(leaderfile):
@@ -185,31 +170,50 @@ def load_leaders(leaderfile):
         for row in csvreader:
             # 'dictify' this row of data, associating each field in the header with a value
             row_dict = dictify(fields,row)
-            # each row will contain a ConstituentID that is unique for each unique person
-            this_id = row_dict['ConstituentID']
-            print("processing ConstituentID", this_id)
-            if this_id in leaders_by_id:
-                # we have already processed a row with this ID, so grab the existing Leader instance
-                leader = leaders_by_id[this_id]
-            else:
-                # first time we've seen this ID so create a new Leader instance
-                this_email = row_dict['Email']
-                leader = Leader(this_id,this_email)
-                leaders_by_id[this_id] = leader
-            # add names from this record. Two versions are supplied in the record.
-            leader.add_name(row_dict['FirstName'],row_dict['LastName'],row_dict['MiddleInitial'])
-            leader.add_name(row_dict['REFirstName'],row_dict['RELastName'],row_dict['REMiddleInitial'])
-            # associate each name variant found in the data with the same leader record
-            for name in leader.names:
-                leaders_by_name[name] = leader
-            # add the committee affiliation
-            leader.add_committee(row_dict['Committee'])
+            if len(row_dict) != 0:
+                # each row will contain a ConstituentID that is unique for each unique person
+                this_id = row_dict['ConstituentID']
+                print("processing ConstituentID", this_id)
+                if this_id in leaders_by_id:
+                    # we have already processed a row with this ID, so grab the existing Leader instance
+                    leader = leaders_by_id[this_id]
+                else:
+                    # first time we've seen this ID so create a new Leader instance
+                    this_email = row_dict['Email']
+                    leader = Leader(this_id,this_email)
+                    leaders_by_id[this_id] = leader
+                # add names from this record. Two versions are supplied in the record.
+                leader.add_name(row_dict['FirstName'],row_dict['LastName'],row_dict['MiddleInitial'])
+                leader.add_name(row_dict['REFirstName'],row_dict['RELastName'],row_dict['REMiddleInitial'])
+                # associate each name variant found in the data with the same leader record
+                for name in leader.names:
+                    leaders_by_name[name] = leader
+                # add the committee affiliation
+                leader.add_committee(row_dict['Committee'])
 
     # at this point, the Leaders_By_ID dictionary should contain a list of unique constitutent IDs associated with a unique Leader instance.
     print('loaded data on',len(leaders_by_id),'leaders')
     return [leaders_by_id, leaders_by_name]
 
+# need to eliminate all the globals!!
+# program constants
+LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
+COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
+
+# Global Variables
+Next_Fake_ID = -1
+
 def load_trips(tripfile):
+    # local variables
+    active_committees = dict()
+    trips = list()
+    open_trips = 0
+    cancelled_trips = 0
+    waitlisted_trips = 0
+    full_trips = 0
+    earliest_trip = dt.datetime(dt.MAXYEAR,12,31)
+    latest_trip = dt.datetime(dt.MINYEAR,1,1)
+
     # Load all the trip listing data.
     with open(tripfile,'r') as csvfile:
         print('analyzing trip listings in',tripfile)
@@ -219,33 +223,34 @@ def load_trips(tripfile):
             # parse the row into a dictionary matching field names to field values
             this_trip = dictify(fields,row)
             # save this dictionary in our list of trips
-            Trips += [this_trip]
+            trips += [this_trip]
             # Inspect the committee, and update the dictionary mapping committees to trip counts
             this_committee = this_trip['Committee']
-            if this_committee in Active_Committees:
-                Active_Committees[this_committee] += 1
+            if this_committee in active_committees:
+                active_committees[this_committee] += 1
             else:
-                Active_Committees[this_committee] = 1
+                active_committees[this_committee] = 1
             this_date = dt.datetime.strptime(this_trip['TripStartDate'],'%m/%d/%Y')
             # update values of Earliest_Trip and Latest_Trip if appropriate
-            if this_date < Earliest_Trip:
-                Earliest_Trip = this_date
-            if this_date > Latest_Trip:
-                Latest_Trip = this_date
+            if this_date < earliest_trip:
+                earliest_trip = this_date
+            if this_date > latest_trip:
+                latest_trip = this_date
             this_status = this_trip['TripStatus']
             # update the count of trips with each of four different status values
             if this_status == 'O':
-                Open_Trips += 1
+                open_trips += 1
             elif this_status == 'C':
-                Cancelled_Trips += 1
+                cancelled_trips += 1
             elif this_status == 'W':
-                Waitlisted_Trips += 1
+                waitlisted_trips += 1
             elif this_status == 'F':
-                Full_Trips += 1
+                full_trips += 1
 
-    print('statistics on',len(Trips),'trips:')
-    print('trip data spans',Earliest_Trip.strftime("%m/%d/%Y"),'to',Latest_Trip.strftime("%m/%d/%Y"))
-    print(Open_Trips,'Open,',Full_Trips,'Full,',Waitlisted_Trips,'Waitlisted,',Cancelled_Trips,'cancelled')
+    print('statistics on',len(trips),'trips:')
+    print('trip data spans',earliest_trip.strftime("%m/%d/%Y"),'to',latest_trip.strftime("%m/%d/%Y"))
+    print(open_trips,'Open,',full_trips,'Full,',waitlisted_trips,'Waitlisted,',cancelled_trips,'cancelled')
+    return trips
 
 def analyze_trips(trips, leaders_by_name, leaders_by_id):
     # now let's iterate over all the trips and separately process leaders and coleaders
@@ -304,9 +309,19 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                         leader.add_coleader_credit(trip_date)
 
 if __name__ == "__main__":
+    # main body of program
     print("Preparing to analyze data from AMC Activities Database")
     leader_file = sys.argv[1]
+    if len(sys.argv) != 3:
+        print("Missing expected arguments: leaderfile tripfile")
+        exit()
+    if not(os.path.isfile(leader_file)):
+        print(leader_file,"does not exist")
+        exit()
     trip_file = sys.argv[2]
+    if not(os.path.isfile(trip_file)):
+        print(trip_file,"does not exist")
+        exit()
    
     # load the leaders
     print("Step 1: loading leaders")
@@ -314,14 +329,16 @@ if __name__ == "__main__":
     leaders_by_id = result[0]
     leaders_by_name = result[1]
     
-    # stopped editing here!!
-    # print("Step 2: load the trips")
-    # load_trips(tripf)
-    # print("Step 3: Analyze trips")
-    # analyze_trips()
-    # print("Done with analysis, writing output files")
+    # load the trips
+    print("Step 2: loading trips")
+    load_trips(trip_file)
+    exit()
 
-    """ output_file_1 = trip_file_base+'-leaderdata.csv'
+    print("Step 3: Analyze trips")
+    analyze_trips()
+    print("Done with analysis, writing output files")
+
+    output_file_1 = trip_file_base+'-leaderdata.csv'
     print('Writing leader data to',output_file_1)
     with open(output_file_1, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile,fieldnames=Leader.fieldnames)
@@ -334,9 +351,6 @@ if __name__ == "__main__":
     with open(output_file_2, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         for c in Active_Committees:
-            writer.writerow([c,Active_Committees[c]]) """
+            writer.writerow([c,Active_Committees[c]])
 
     print('Done!')
-    
-# run main() if we are called from the command line
-
