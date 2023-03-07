@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["leader-data-2023.csv", "trip-data-2023.csv"],
+            }
+    ]
+}

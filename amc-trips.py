@@ -177,7 +177,7 @@ def load_leaders(leaderfile):
     leaders_by_id = dict()
     leaders_by_name = dict()
     with open(leaderfile,'r') as csvfile:
-        print('Loading leaders from ',leaderfile)
+        print('Loading leaders from',leaderfile)
         csvreader = csv.reader(csvfile)
         # load the first row which contains a comma-separated list of field names
         fields = csvreader.__next__()
