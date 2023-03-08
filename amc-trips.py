@@ -145,7 +145,7 @@ def dictify(field_names, field_values):
     # create and return a dictionary that associates field names with field values
     # length of field_values must be <= length of field_names
     if len(field_values) != len(field_names):
-        print('in dictify, number of field values does not match number of expected fields')
+        # something isn't right with the input data, just ignore it
         return {}
     new_dict = {}
     for field_num in range(0,len(field_names)):
@@ -193,15 +193,8 @@ def load_leaders(leaderfile):
 
     # at this point, the Leaders_By_ID dictionary should contain a list of unique constitutent IDs associated with a unique Leader instance.
     print('loaded data on',len(leaders_by_id),'leaders')
+    # return the two dictionaries
     return [leaders_by_id, leaders_by_name]
-
-# need to eliminate all the globals!!
-# program constants
-LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
-COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
-
-# Global Variables
-Next_Fake_ID = -1
 
 def load_trips(tripfile):
     # local variables
@@ -252,9 +245,15 @@ def load_trips(tripfile):
     print(open_trips,'Open,',full_trips,'Full,',waitlisted_trips,'Waitlisted,',cancelled_trips,'cancelled')
     return trips
 
+# program constants
+LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
+COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
+
 def analyze_trips(trips, leaders_by_name, leaders_by_id):
+    # local variables
+    next_fake_ID = -1
     # now let's iterate over all the trips and separately process leaders and coleaders
-    for trip in Trips:
+    for trip in trips:
         status = trip['TripStatus']
         trip_date = trip['TripStartDate']
         # extract the lists of leaders and coleaders. These typically are name strings like 'Jane Q Public'.
@@ -267,8 +266,8 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                 normalized = normalized_name(leader_name)
                 if normalized not in leaders_by_name:
                     # this leader name was not previously found in the leader data
-                    # create a new Leader instance, mark it as not known, set the name, add to Leaders_By_Name
-                    leader = Leader(Next_Fake_ID,'')
+                    # create a new Leader instance, mark it as not known, set the name, add to leaders_by_name
+                    leader = Leader(next_fake_ID,'')
                     parts = normalized.split('_',2)
                     if len(parts) == 2:
                         leader.add_name(parts[0],parts[1],'')
@@ -276,8 +275,8 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                         leader.add_name(parts[0],parts[2],parts[1])
                     leader.known = False
                     leaders_by_name[normalized] = leader
-                    leaders_by_id[Next_Fake_ID] = leader
-                    Next_Fake_ID -= 1
+                    leaders_by_id[next_fake_ID] = leader
+                    next_fake_ID -= 1
                 else:
                     leader = leaders_by_name[normalized]
                 if status == 'C':
@@ -291,7 +290,7 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                     if normalized not in leaders_by_name:
                         # this coleader name was not previously found in the leader data
                         # these unapproved leaders are assigned negative 'fake' id numbers 
-                        leader = Leader(Next_Fake_ID,'')
+                        leader = Leader(next_fake_ID,'')
                         parts = normalized.split('_',2)
                         if len(parts) == 2:
                             leader.add_name(parts[0],parts[1],'')
@@ -299,8 +298,8 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                             leader.add_name(parts[0],parts[2],parts[1])
                         leader.known = False
                         leaders_by_name[normalized] = leader
-                        leaders_by_id[Next_Fake_ID] = leader
-                        Next_Fake_ID -= 1
+                        leaders_by_id[next_fake_ID] = leader
+                        next_fake_ID -= 1
                     else:
                         leader = leaders_by_name[normalized]
                     if status == 'C':
@@ -331,25 +330,28 @@ if __name__ == "__main__":
     
     # load the trips
     print("Step 2: loading trips")
-    load_trips(trip_file)
+    trips = load_trips(trip_file)
     exit()
 
     print("Step 3: Analyze trips")
-    analyze_trips()
+    analyze_trips(trips, leaders_by_name, leaders_by_id)
     print("Done with analysis, writing output files")
 
+    # FIX THIS
     output_file_1 = trip_file_base+'-leaderdata.csv'
     print('Writing leader data to',output_file_1)
     with open(output_file_1, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile,fieldnames=Leader.fieldnames)
         writer.writeheader()
-        for leader in Leaders_By_ID:
-            writer.writerow(Leaders_By_ID[leader].as_dict())
+        for leader in leaders_by_id:
+            writer.writerow(leaders_by_id[leader].as_dict())
 
+    # FIX THIS
     output_file_2 = trip_file_base+'-committeedata.csv'
     print('Writing committee data to',output_file_2)
     with open(output_file_2, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
+        # FIX THIS
         for c in Active_Committees:
             writer.writerow([c,Active_Committees[c]])
 
