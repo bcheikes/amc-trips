@@ -86,6 +86,7 @@ class Leader:
         return fullname
     
     def add_committee(self,committee_name):
+        # keep track of the unique committees with which this leader is affiliated
         if not(committee_name in self.committees):
             self.committees += [committee_name]
         return self.committees
@@ -136,16 +137,16 @@ class Leader:
             return parts[1]
         else:
             return parts[2]
-
 # End of Leader class definition
 
 def dictify(field_names, field_values):
     # field_names is a list of string labels of the field values
     # field_values is a list of values
-    # create and return a dictionary that associates field names with field values
-    # length of field_values must be <= length of field_names
+    # create and return a dictionary that associates each field name with the corresponding field value
+    # length of field_values must be same as field_names
     if len(field_values) != len(field_names):
         # something isn't right with the input data, just ignore it
+        print("Warning: dictify() called with len(field_names) =", len(field_names), " and len(field_values) =", len(field_values))
         return {}
     new_dict = {}
     for field_num in range(0,len(field_names)):
@@ -194,12 +195,13 @@ def load_leaders(leaderfile):
     # at this point, the Leaders_By_ID dictionary should contain a list of unique constitutent IDs associated with a unique Leader instance.
     print('loaded data on',len(leaders_by_id),'leaders')
     # return the two dictionaries
-    return [leaders_by_id, leaders_by_name]
+    return (leaders_by_id, leaders_by_name)
 
 def load_trips(tripfile):
-    # local variables
-    active_committees = dict()
+    # local variables - computed and returned
     trips = list()
+    active_committees = dict()
+    # local variables - used internally by the function
     open_trips = 0
     cancelled_trips = 0
     waitlisted_trips = 0
@@ -240,17 +242,16 @@ def load_trips(tripfile):
             elif this_status == 'F':
                 full_trips += 1
 
+    # print some statistics on the data we've processed
     print('statistics on',len(trips),'trips:')
     print('trip data spans',earliest_trip.strftime("%m/%d/%Y"),'to',latest_trip.strftime("%m/%d/%Y"))
     print(open_trips,'Open,',full_trips,'Full,',waitlisted_trips,'Waitlisted,',cancelled_trips,'cancelled')
-    return trips
-
-# program constants
-LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
-COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
+    return (trips, active_committees)
 
 def analyze_trips(trips, leaders_by_name, leaders_by_id):
     # local variables
+    LEADER_FIELDS = ['TripLeader1','TripLeader2','TripLeader3','TripLeader4']
+    COLEADER_FIELDS = ['TripCoLeader1','TripCoLeader2']
     next_fake_ID = -1
     # now let's iterate over all the trips and separately process leaders and coleaders
     for trip in trips:
@@ -306,6 +307,7 @@ def analyze_trips(trips, leaders_by_name, leaders_by_id):
                         leader.trips_cancelled += 1
                     else:
                         leader.add_coleader_credit(trip_date)
+    return (leaders_by_id, leaders_by_name)
 
 if __name__ == "__main__":
     # main body of program
@@ -323,22 +325,20 @@ if __name__ == "__main__":
         exit()
    
     # load the leaders
-    print("Step 1: loading leaders")
-    result = load_leaders(leader_file)
-    leaders_by_id = result[0]
-    leaders_by_name = result[1]
+    print("Step 1: Loading leaders")
+    leaders_by_id, leaders_by_name = load_leaders(leader_file)
+    print("Extracted",len(leaders_by_id),"leaders by ID, and",len(leaders_by_name),"leaders by name")
     
     # load the trips
-    print("Step 2: loading trips")
-    trips = load_trips(trip_file)
-    exit()
+    print("Step 2: Loading trips")
+    trips, active_committees = load_trips(trip_file)
+    print("Extracted",len(trips),"trips")
 
-    print("Step 3: Analyze trips")
-    analyze_trips(trips, leaders_by_name, leaders_by_id)
+    print("Step 3: Analyzing trips")
+    leaders_by_id, leaders_by_name = analyze_trips(trips, leaders_by_name, leaders_by_id)
     print("Done with analysis, writing output files")
 
-    # FIX THIS
-    output_file_1 = trip_file_base+'-leaderdata.csv'
+    output_file_1 = trip_file.replace(".csv","-leaderdata.csv")
     print('Writing leader data to',output_file_1)
     with open(output_file_1, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile,fieldnames=Leader.fieldnames)
@@ -346,13 +346,11 @@ if __name__ == "__main__":
         for leader in leaders_by_id:
             writer.writerow(leaders_by_id[leader].as_dict())
 
-    # FIX THIS
-    output_file_2 = trip_file_base+'-committeedata.csv'
+    output_file_2 = trip_file.replace(".csv","-committeedata.csv")
     print('Writing committee data to',output_file_2)
     with open(output_file_2, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        # FIX THIS
-        for c in Active_Committees:
-            writer.writerow([c,Active_Committees[c]])
+        for c in active_committees:
+            writer.writerow([c,active_committees[c]])
 
     print('Done!')
